@@ -41,18 +41,15 @@ def getJobsList(tab_file_name):
 
 def runCommand(command):
 
-    datetime_now = datetime.now()
-
     try:
     
         return_value = os.system(command)
-    
+        logging.info("Executed command: '{}'".format(command))
     except Exception as e:
 
-        logging.error("{}: error:\n{}".format(datetime_now, e))
+        logging.error("Error:{}, CommandToExecute: '{}'".format(e, command))
     
     finally:
-        logging.info("{}: Exit status: {}. Command to complete: {}".format(datetime_now, return_value, command))
         os._exit(return_value)
 
 def loop(jobs_list):
@@ -64,8 +61,15 @@ def loop(jobs_list):
 
     for job_time, command in jobs_list:
         jobs_time_to_check.append(job_time.get_next(datetime))
+    
+    if len(jobs_time_to_check) > 0:
+        pass
+    else:
+        logging.info("Nothing to execute. Check if there is any commands and their spelling is right. End of program")
+        os._exit(0)
 
     while True:
+
 
         for i in range(len(jobs_time_to_check)):
 
@@ -98,7 +102,11 @@ if __name__ == "__main__":
     logging.basicConfig(filename="logs.log",
     filemode="a",
     level=config["LoggingLevel"],
-    format="%(levelname)s:%(message)s")
+    format="[%(asctime)s]:%(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %I:%M:%S")
+
+    # Logging the start of program work
+    logging.info("Start of program")
 
     # Starting infinity loop
     loop(jobs_list)

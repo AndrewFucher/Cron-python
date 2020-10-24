@@ -1,4 +1,4 @@
-INFO:2020-10-21 00:24:00: Exit status: 0. Command to complete: echo "Hello there~"
-INFO:2020-10-21 00:24:00: Exit status: 0. Command to complete: echo "Damn it!~"
-INFO:2020-10-21 00:24:00: Exit status: 0. Command to complete: echo "First and last call"
-INFO:2020-10-21 00:24:00: Exit status: 0. Command to complete: echo "aasdf"
+[2020-10-24 06:10:50]:INFO: Start of program
+[2020-10-24 06:17:41]:INFO: Start of program
+[2020-10-24 06:24:08]:INFO: Start of program
+[2020-10-24 06:25:00]:INFO: Executed command: echo "Hello there~"
