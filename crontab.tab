@@ -1,6 +1,0 @@
-# Some test to check how cron works
-
-*/1 * * * * echo "Hello there~"
-*/2 * * * * echo "Damn it!~"
-*/3 * * * * echo "First and last call"
-* */4 * * * echo "aasdf"
