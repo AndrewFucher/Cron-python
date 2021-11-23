@@ -1,15 +1,17 @@
 from datetime import datetime
 import sys
-import signal
+import threading
+from typing import Any
 
 from croniter import croniter
-from crontab import CronItem, CronTab
+from crontab import CronTab
+
+import command_executor
 
 import logging_messages
 
-from multiprocessing import Process
+from loguru import logger
 
-import logging
 import os
 
 from constants import (
@@ -20,39 +22,48 @@ from constants import (
 )
 from cron_configuration import CronConfiguration
 
-logger: logging.Logger = logging.getLogger(__name__)
 configuration: CronConfiguration = CronConfiguration()
 
 
 def set_default_logging_config() -> None:
     os.makedirs(os.path.dirname(DEFAULT_LOGGING_FILE_PATH), exist_ok=True)
-    
-    logging.basicConfig(
+
+    logger.add(
         format=DEFAULT_LOGGING_FORMAT,
-        filename=DEFAULT_LOGGING_FILE_PATH,
+        sink=DEFAULT_LOGGING_FILE_PATH,
         level=DEFAULT_LOGGING_LEVEL,
+        enqueue=True,
+        backtrace=True,
     )
 
-    logging.info(logging_messages.DEFAULT_LOGGING_CONFIG_HAS_BEEN_SET)
+    logger.info(logging_messages.DEFAULT_LOGGING_CONFIG_HAS_BEEN_SET)
 
 
 def set_loggin_config(
     fmt: str = configuration.LOGGING_FORMAT,
     file_path: str = configuration.LOGGING_FILE_PATH,
-    lvl: str = logging.getLevelName(configuration.LOGGING_LEVEL),
+    lvl: str = configuration.LOGGING_LEVEL,
 ) -> None:
-    logging.basicConfig(format=fmt, filename=file_path, level=lvl, force=True)
+    global logger
+    logger.remove()
+    logger.add(
+        format=DEFAULT_LOGGING_FORMAT,
+        sink=DEFAULT_LOGGING_FILE_PATH,
+        level=DEFAULT_LOGGING_LEVEL,
+        enqueue=True,
+        backtrace=True,
+    )
 
 
 def set_config(config_file_path: str = CONFIGURATION_FILE_PATH) -> None:
     logger.info(logging_messages.STARTING_SETTING_CONFIGURATION)
-
+    is_any_error_came_up = True
     try:
         global configuration
         with open(config_file_path, "r") as conf_file:
             configuration = CronConfiguration.from_json(conf_file.read())
         logger.info(logging_messages.ENDED_SETTING_CONFIGURATION)
-        return
+        is_any_error_came_up = False
     except FileNotFoundError as exc:
         logger.warning(logging_messages.NO_FILE_FOUND.format(config_file_path))
     except PermissionError as exc:
@@ -62,7 +73,8 @@ def set_config(config_file_path: str = CONFIGURATION_FILE_PATH) -> None:
     except Exception as exc:
         logger.warning(logging_messages.UNKNOWN_ERROR)
     finally:
-        logger.info(logging_messages.USING_DEFAULT_CONFIGURATION)
+        if is_any_error_came_up:
+            logger.info(logging_messages.USING_DEFAULT_CONFIGURATION)
 
     logger.info(logging_messages.ENDED_SETTING_CONFIGURATION)
 
@@ -89,25 +101,40 @@ def get_crontab(crontab_file_path: str) -> CronTab:
     return crontab
 
 
-def iter_over_crontab(crontab: CronTab) -> None:
-    cron_job: CronItem = None
-    datetime_now = datetime.now()
-    for cron_job in crontab:
-        # croniter.get_next(croniter(cron_job.slices.render()))
-        if croniter.match(cron_job.slices.render(), datetime_now):
-            subprocess = Process(target=execute_command, args=(cron_job.command))
-            subprocess.start()
+def iter_over_cron_jobs(cron_jobs: "list[list[Any]]") -> "list[list[Any]]":
+    try:
+        commands_to_execute = []
+        datetime_now = datetime.now().timestamp()
+        for cron_job_numer in range(len(cron_jobs)):
+            if cron_jobs[cron_job_numer][0].get_current() < datetime_now:
+                cron_jobs[cron_job_numer][0].get_next()
+                commands_to_execute.append(str(cron_jobs[cron_job_numer][1]))
+        if len(commands_to_execute) > 0:
+            for c in commands_to_execute:
+                threading.Thread(target=command_executor.execute_command, args=(c,logger,)).start()
+
+    except Exception as exc:
+        logger.exception(logging_messages.UNKNOWN_ERROR)
+        sys.exit(1)
+
+    return cron_jobs
 
 
-def execute_command(command: str) -> None:
-    pid = os.getpid()
-    logger.info(logging_messages.EXECUTING_COMMAND.format(pid, command))
-    result = os.system(command)
-    logger.info(
-        logging_messages.FINISHED_EXECUTING_COMMAND_WITH_CODE.format(pid, result)
-    )
-    # sys.exit(result)
-    os.kill(pid, signal.SIGTERM)
+
+
+
+def parse_crontab_to_cron_jobs(
+    crontab: CronTab, start_time: datetime
+) -> "list[list[Any]]":
+    return [
+        (
+            croniter(
+                str(cron_job.slices), start_time.timestamp(), float, True, None, True
+            ),
+            cron_job.command,
+        )
+        for cron_job in crontab
+    ]
 
 
 def init() -> None:
@@ -133,8 +160,10 @@ def workflow(crontab: CronTab) -> None:
 
     logger.info(logging_messages.STARTING_WORKFLOW)
 
+    cron_jobs = parse_crontab_to_cron_jobs(crontab, datetime.now())
+
     while True:
-        iter_over_crontab(crontab)
+        cron_jobs = iter_over_cron_jobs(cron_jobs)
 
 
 if __name__ == "__main__":

@@ -16,4 +16,7 @@
 23 0-20/2 * * * echo “At 04:05 on Sunday.”;
 15 14 1 * * echo “At 14:15 on day-of-month 1.”;
 23 0-20/2 * * * echo “At minute 23 past every 2nd hour from 0 through 20.”;
-* * * * * echo "At every minute.";
+* * * * * echo "At every minute 1.";
+* * * * * echo "At every minute 2.";
+* * * * * echo "At every minute 3.";
+* * * * * echo "At every minute 4.";

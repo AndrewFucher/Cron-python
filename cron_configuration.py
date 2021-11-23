@@ -17,3 +17,5 @@ class CronConfiguration:
     LOGGING_FILE_PATH: str = field(default=DEFAULT_LOGGING_FILE_PATH)
     LOGGING_FORMAT: str = field(default=DEFAULT_LOGGING_FORMAT)
     CRONTAB_FILE_PATH: str = field(default=None)
+    # LOGGER_NAME: str = field(default="__main__")
+    MAX_PROCESSES: int = field(default=1)
