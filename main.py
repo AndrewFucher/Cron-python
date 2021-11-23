@@ -1,58 +1,39 @@
 from datetime import datetime
+from typing import Any
 import sys
 import threading
-from typing import Any
+import os
+import uuid
 
 from croniter import croniter
 from crontab import CronTab
 
-import command_executor
-
-import logging_messages
 
 from loguru import logger
 
-import os
 
-from constants import (
-    CONFIGURATION_FILE_PATH,
-    DEFAULT_LOGGING_FORMAT,
-    DEFAULT_LOGGING_FILE_PATH,
-    DEFAULT_LOGGING_LEVEL,
-)
+from constants import CONFIGURATION_FILE_PATH, DEFAULT_LOGGING_FILE_PATH
 from cron_configuration import CronConfiguration
+import logging_messages
 
 configuration: CronConfiguration = CronConfiguration()
 
 
-def set_default_logging_config() -> None:
-    os.makedirs(os.path.dirname(DEFAULT_LOGGING_FILE_PATH), exist_ok=True)
-
-    logger.add(
-        format=DEFAULT_LOGGING_FORMAT,
-        sink=DEFAULT_LOGGING_FILE_PATH,
-        level=DEFAULT_LOGGING_LEVEL,
-        enqueue=True,
-        backtrace=True,
-    )
-
-    logger.info(logging_messages.DEFAULT_LOGGING_CONFIG_HAS_BEEN_SET)
-
-
 def set_loggin_config(
     fmt: str = configuration.LOGGING_FORMAT,
-    file_path: str = configuration.LOGGING_FILE_PATH,
     lvl: str = configuration.LOGGING_LEVEL,
 ) -> None:
-    global logger
     logger.remove()
-    logger.add(
-        format=DEFAULT_LOGGING_FORMAT,
-        sink=DEFAULT_LOGGING_FILE_PATH,
-        level=DEFAULT_LOGGING_LEVEL,
-        enqueue=True,
-        backtrace=True,
-    )
+    try:
+        logger.add(
+            format=fmt,
+            sink=DEFAULT_LOGGING_FILE_PATH,
+            level=lvl,
+            enqueue=True,
+            backtrace=True,
+        )
+    except Exception as exc:
+        logger.error(logging_messages.UNKNOWN_ERROR)
 
 
 def set_config(config_file_path: str = CONFIGURATION_FILE_PATH) -> None:
@@ -111,7 +92,7 @@ def iter_over_cron_jobs(cron_jobs: "list[list[Any]]") -> "list[list[Any]]":
                 commands_to_execute.append(str(cron_jobs[cron_job_numer][1]))
         if len(commands_to_execute) > 0:
             for c in commands_to_execute:
-                threading.Thread(target=command_executor.execute_command, args=(c,logger,)).start()
+                threading.Thread(target=execute_command, args=(c,)).start()
 
     except Exception as exc:
         logger.exception(logging_messages.UNKNOWN_ERROR)
@@ -120,7 +101,17 @@ def iter_over_cron_jobs(cron_jobs: "list[list[Any]]") -> "list[list[Any]]":
     return cron_jobs
 
 
-
+def execute_command(command: str) -> None:
+    """
+    Executes command.
+    Use multithreading to run method because logger used from shared memory
+    """
+    thread_id = uuid.uuid4()
+    logger.info(logging_messages.EXECUTING_COMMAND.format(thread_id, command))
+    result = os.system(command)
+    logger.info(
+        logging_messages.FINISHED_EXECUTING_COMMAND_WITH_CODE.format(thread_id, result)
+    )
 
 
 def parse_crontab_to_cron_jobs(
@@ -139,9 +130,6 @@ def parse_crontab_to_cron_jobs(
 
 def init() -> None:
     logger.info(logging_messages.STARTING_INITIALIZATION)
-
-    set_default_logging_config()
-
     logger.info(logging_messages.ENDED_INITIALIZATION)
 
 
@@ -149,7 +137,10 @@ def set_up() -> None:
     logger.info(logging_messages.STARTING_SET_UP)
 
     set_config()
-    set_loggin_config()
+    set_loggin_config(
+        configuration.LOGGING_FORMAT,
+        configuration.LOGGING_LEVEL,
+    )
 
     logger.info(logging_messages.ENDED_SET_UP)
 
@@ -167,6 +158,8 @@ def workflow(crontab: CronTab) -> None:
 
 
 if __name__ == "__main__":
+    logger.info(logging_messages.PROGRAM_START_UP_SPLITTER)
+
     init()
     set_up()
     crontab: CronTab = get_crontab(configuration.CRONTAB_FILE_PATH)
